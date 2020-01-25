@@ -35,7 +35,6 @@ response.json()
 
 import pandas as pd
 
-df = pd.DataFrame.from_dict(response.json())
 
 response.json().keys()
 for key in response.json().keys():
@@ -69,16 +68,15 @@ print(response.text)
 
 response2 = requests.request('GET', 'https://api.yelp.com/v3/autocomplete?text=del&latitude=37.786882&longitude=-122.399972', headers=headers)
 
-term = 'Buffalo Wild Wings'
+term = 'Popeyes'
 location = 'Richmond VA'
-SEARCH_LIMIT = 10
-
+SEARCH_LIMIT = 1
+response_df = pd.DataFrame()
 url = 'https://api.yelp.com/v3/businesses/search'
 
 headers = {
         'Authorization': 'Bearer {}'.format(api_key),
     }
-
 url_params = {
                 'term': term.replace(' ', '+'),
                 'location': location.replace(' ', '+'),
@@ -86,9 +84,56 @@ url_params = {
             }
 response = requests.get(url, headers=headers, params=url_params)
 response.json().keys()
-response.json()['businesses'].value_counts()
+response.json()['businesses'][0]['alias']
+#response.json()['total']
+#response.json()['region']
+df = pd.DataFrame.from_dict(response.json()['businesses'])
+response_df = pd.concat([response_df, df])
+df['latitude'] = response.json()['businesses'][0]['coordinates']['latitude']
+df['alias'].iloc[0]
+i= 0
+while i < len(response.json()['businesses']):
+    df['latitude'].iloc[i] = response.json()['businesses'][i]['coordinates']['latitude']
+    i+=1
 
 # to get business infor - only provides up to 3 photos and 3 reviews
 GET https://api.yelp.com/v3/businesses/north-india-restaurant-san-francisco
 # to get reviews of business
 GET https://api.yelp.com/v3/businesses/north-india-restaurant-san-francisco/reviews
+
+
+raw_data = pd.read_csv('https://raw.githubusercontent.com/CrunchWillSupreme/GTRI_ICL_Datasets/master/SF_Resturant_Scores/SF_Restaurant_Scores.csv')
+
+def prep_data(raw_data):
+    raw_data['inspection_date'] = pd.to_datetime(raw_data['inspection_date'])
+    raw_data['violation_code'] = raw_data['violation_id'].str[-6:]
+    raw_data['inspection_year'] = raw_data['inspection_date'].dt.year
+    raw_data['inspection_month'] = raw_data['inspection_date'].dt.month
+    raw_data = raw_data.rename(columns={"Police Districts": "Police_Districts","Supervisor Districts":"Supervisor_Districts", "Fire Prevention Districts":"Fire_Prevention_Districts","Zip Codes":"Zip_Codes","Analysis Neighborhoods":"Analysis_Neighborhoods"})
+    data = raw_data.copy()
+    return data
+
+raw_data = prep_data(raw_data)
+# only 106 rows, ~0.2% of the data.  Let's remove these
+data = raw_data[raw_data['inspection_score'].notnull()]
+
+API_HOST = 'https://api.yelp.com'
+SEARCH_PATH = '/v3/businesses/search'
+BUSINESS_PATH = '/v3/businesses/'  
+
+this = 0
+while this <2:
+    for i,j in zip(data['business_name'], data['business_address']):
+        term = i
+        location = j
+        SEARCH_LIMIT = 1
+        url = 'https://api.yelp.com/v3/businesses/search'
+        headers = {'Authorization': 'Bearer {}'.format(api_key),}
+        url_params = {  'term': term.replace(' ', '+'),
+                        'location': location.replace(' ', '+'),
+                        'limit': SEARCH_LIMIT}
+        response = requests.get(url, headers=headers, params=url_params)
+        df = pd.DataFrame.from_dict(response.json()['businesses'])
+        response_df = pd.concat([response_df, df])
+        this +=1
+        
